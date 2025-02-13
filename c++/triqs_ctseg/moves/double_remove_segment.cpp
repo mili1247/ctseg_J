@@ -73,9 +73,9 @@ namespace triqs_ctseg::moves {
     // Make the prop_seg[1] as a seglist to use overlap() and K_overlap()
     std::vector<segment_t> seglist_temp = std::vector<segment_t>(1);
     seglist_temp[0] = prop_seg[1];
-    ln_trace_ratio -= -wdata.U(color_0, color_1) * overlap(seglist_temp, prop_seg[0]);
+    ln_trace_ratio += -wdata.U(color_0, color_1) * overlap(seglist_temp, prop_seg[0]);
     if (wdata.has_Dt)
-      ln_trace_ratio -= K_overlap(seglist_temp, prop_seg[0].tau_c, prop_seg[0].tau_cdag, wdata.K, color_0, color_1);
+      ln_trace_ratio += K_overlap(seglist_temp, prop_seg[0].tau_c, prop_seg[0].tau_cdag, wdata.K, color_0, color_1);
 
     double trace_ratio = std::exp(ln_trace_ratio);
 
