@@ -27,12 +27,14 @@ namespace triqs_ctseg::moves {
 
     // ------------ Choice of segment --------------
     // Select insertion colors
-    colors = all_pairs[rng(all_pairs.size())];
-    auto const &[color_0, color_1] = colors;
+    int color_0 = rng(config.n_color());
+    int color_1 = rng(config.n_color() - 1);
+    if (color_1 >= color_0) ++color_1; // little trick to select another color
+    colors.assign({color_0, color_1});
     LOG("Inserting at color ({}, {})", color_0, color_1);
 
     // For each color, perform a single insert
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       auto &sl = config.seglists[color];
 
       // Select insertion window [tau_left,tau_right]
@@ -76,7 +78,7 @@ namespace triqs_ctseg::moves {
 
     // ------------  Trace ratio  -------------
     double ln_trace_ratio = 0.0;
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       ln_trace_ratio += wdata.mu(color) * prop_seg[i].length(); // chemical potential
       // Overlaps
       for (auto c : range(config.n_color())) {
@@ -89,10 +91,9 @@ namespace triqs_ctseg::moves {
     } // color
 
     // Counting the overlap between the inserting segments
-    // Make the prop_seg[1] as a seglist to use overlap() and K_overlap()
-    std::vector<segment_t> seglist_temp = std::vector<segment_t>(1);
-    seglist_temp[0] = prop_seg[1];
-    ln_trace_ratio += -wdata.U(color_0, color_1) * overlap(seglist_temp, prop_seg[0]);
+    // Make the prop_seg[1] as a seglist to use K_overlap()
+    std::vector<segment_t> seglist_temp = {prop_seg[1]};
+    ln_trace_ratio += -wdata.U(color_0, color_1) * overlap(prop_seg[1], prop_seg[0]);
     if (wdata.has_Dt)
       ln_trace_ratio += K_overlap(seglist_temp, prop_seg[0].tau_c, prop_seg[0].tau_cdag, wdata.K, color_0, color_1);
 
@@ -105,7 +106,7 @@ namespace triqs_ctseg::moves {
     auto &bl_idx_0   = wdata.index_in_block[color_0];
     auto &bl_idx_1   = wdata.index_in_block[color_1];
     is_same_block    = bl_0 == bl_1;
-    double det_ratio; // This is not safe, but no other better solutions come to my mind
+    double det_ratio;
     if (is_same_block) { // insert two rows and columns on the same block
       auto &D        = wdata.dets[bl_0];
       if (wdata.offdiag_Delta) {
@@ -145,12 +146,9 @@ namespace triqs_ctseg::moves {
       det_ratio        = det_ratio_0 * det_ratio_1;
     }
 
-    //value_type try_insert(long i, long j, x_type const &x, y_type const &y)
-    //value_type try_insert2(long i0, long i1, long j0, long j1, x_type const &x0, x_type const &x1, y_type const &y0, y_type const &y1)
-
     // ------------  Proposition ratio ------------
     double prop_ratio = 1.0;
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       auto &sl = config.seglists[color];
       double current_number_intervals = std::max(long(1), long(sl.size()));
       double future_number_segments   = sl.size() + 1;
@@ -175,19 +173,18 @@ namespace triqs_ctseg::moves {
 
     LOG("\n - - - - - ====> ACCEPT - - - - - - - - - - -\n");
 
-    auto const &[color_0, color_1] = colors;
     double initial_sign = trace_sign(wdata);
     LOG("Initial sign is {}. Initial configuration: {}", initial_sign, config);
 
     // Insert the times into the det
     if (is_same_block)
-      wdata.dets[wdata.block_number[color_0]].complete_operation();
+      wdata.dets[wdata.block_number[colors[0]]].complete_operation();
     else
-      for (auto const &color : {color_0, color_1})
+      for (auto const &color : colors)
         wdata.dets[wdata.block_number[color]].complete_operation();
 
     // Insert the segment in an ordered list
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       auto &sl = config.seglists[color];
       sl.insert(std::upper_bound(sl.begin(), sl.end(), prop_seg[i]), prop_seg[i]);
     } // color
@@ -209,11 +206,10 @@ namespace triqs_ctseg::moves {
   //--------------------------------------------------
   void double_insert_segment::reject() {
     LOG("\n - - - - - ====> REJECT - - - - - - - - - - -\n");
-    auto const &[color_0, color_1] = colors;
     if (is_same_block)
-      wdata.dets[wdata.block_number[color_0]].reject_last_try();
+      wdata.dets[wdata.block_number[colors[0]]].reject_last_try();
     else
-      for (auto const &color : {color_0, color_1})
+      for (auto const &color : colors)
         wdata.dets[wdata.block_number[color]].reject_last_try();
   }
 

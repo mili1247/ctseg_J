@@ -26,12 +26,14 @@ namespace triqs_ctseg::moves {
 
     // ------------ Choice of segment --------------
     // Select removal colors
-    colors = all_pairs[rng(all_pairs.size())];
-    auto const &[color_0, color_1] = colors;
+    int color_0 = rng(config.n_color());
+    int color_1 = rng(config.n_color() - 1);
+    if (color_1 >= color_0) ++color_1; // little trick to select another color
+    colors.assign({color_0, color_1});
     LOG("Removing at color ({}, {})", color_0, color_1);
 
     // For each color, perform a single remove
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       auto &sl = config.seglists[color];
 
       // If color is empty, nothing to remove
@@ -59,7 +61,7 @@ namespace triqs_ctseg::moves {
     // Same as double insert, up to the sign
     // FIXME : pull it out ?
     double ln_trace_ratio = 0.0;
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       ln_trace_ratio += -wdata.mu(color) * prop_seg[i].length();
       for (auto c : range(config.n_color())) {
         if (c != color) ln_trace_ratio -= -wdata.U(color, c) * overlap(config.seglists[c], prop_seg[i]);
@@ -70,10 +72,10 @@ namespace triqs_ctseg::moves {
     } // color
 
     // Counting the overlap between the removal segments
-    // Make the prop_seg[1] as a seglist to use overlap() and K_overlap()
-    std::vector<segment_t> seglist_temp = std::vector<segment_t>(1);
-    seglist_temp[0] = prop_seg[1];
-    ln_trace_ratio += -wdata.U(color_0, color_1) * overlap(seglist_temp, prop_seg[0]);
+    // Make the prop_seg[1] as a seglist to use K_overlap()
+    // Be careful to the sign here!
+    std::vector<segment_t> seglist_temp = {prop_seg[1]};
+    ln_trace_ratio += -wdata.U(color_0, color_1) * overlap(prop_seg[1], prop_seg[0]);
     if (wdata.has_Dt)
       ln_trace_ratio += K_overlap(seglist_temp, prop_seg[0].tau_c, prop_seg[0].tau_cdag, wdata.K, color_0, color_1);
 
@@ -84,7 +86,7 @@ namespace triqs_ctseg::moves {
     auto &bl_0       = wdata.block_number[color_0];
     auto &bl_1       = wdata.block_number[color_1];
     is_same_block = bl_0 == bl_1;
-    double det_ratio; // This is not safe, but no other better solutions come to my mind
+    double det_ratio;
     if (is_same_block) { // remove two rows and columns on the same block
       auto &D        = wdata.dets[bl_0];
       det_ratio = D.try_remove2(det_lower_bound_x(D, prop_seg[0].tau_cdag),
@@ -102,12 +104,9 @@ namespace triqs_ctseg::moves {
       det_ratio        = det_ratio_0 * det_ratio_1;
     }
 
-    // value_type try_remove(long i, long j)
-    // value_type try_remove2(long i0, long i1, long j0, long j1)
-
     // ------------  Proposition ratio ------------
     double prop_ratio = 1.0;
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       auto &sl = config.seglists[color];
       double current_number_segments = sl.size();
       double future_number_intervals = std::max(1, int(sl.size()) - 1);
@@ -138,19 +137,18 @@ namespace triqs_ctseg::moves {
 
     LOG("\n - - - - - ====> ACCEPT - - - - - - - - - - -\n");
 
-    auto const &[color_0, color_1] = colors;
     double initial_sign = trace_sign(wdata);
     LOG("Initial sign is {}. Initial configuration: {}", initial_sign, config);
 
     // Update the dets
     if (is_same_block) 
-      wdata.dets[wdata.block_number[color_0]].complete_operation();
+      wdata.dets[wdata.block_number[colors[0]]].complete_operation();
     else 
-      for (auto const &color : {color_0, color_1})
+      for (auto const &color : colors)
         wdata.dets[wdata.block_number[color]].complete_operation();
 
     // Remove the segments
-    for (auto const &[i, color] : itertools::enumerate(std::initializer_list<int>{color_0, color_1})) {
+    for (auto const &[i, color] : itertools::enumerate(colors)) {
       auto &sl = config.seglists[color];
       sl.erase(sl.begin() + prop_seg_idx[i]);
     }
@@ -172,11 +170,10 @@ namespace triqs_ctseg::moves {
   //--------------------------------------------------
   void double_remove_segment::reject() {
     LOG("\n - - - - - ====> REJECT - - - - - - - - - - -\n");
-    auto const &[color_0, color_1] = colors;
     if (is_same_block)
-      wdata.dets[wdata.block_number[color_0]].reject_last_try();
+      wdata.dets[wdata.block_number[colors[0]]].reject_last_try();
     else
-      for (auto const &color : {color_0, color_1})
+      for (auto const &color : colors)
         wdata.dets[wdata.block_number[color]].reject_last_try();
   }
 

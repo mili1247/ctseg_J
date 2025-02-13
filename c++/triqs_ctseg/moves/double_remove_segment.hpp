@@ -28,27 +28,15 @@ namespace triqs_ctseg::moves {
     triqs::mc_tools::random_generator &rng;
 
     // Internal data
-    std::pair<int, int> colors;
+    std::vector<int> colors         = std::vector<int>(2);
     std::vector<segment_t> prop_seg = std::vector<segment_t>(2);
-    std::vector<long> prop_seg_idx = std::vector<long>(2);
-    std::vector<std::pair<int, int>> all_pairs;
+    std::vector<long> prop_seg_idx  = std::vector<long>(2);
     double det_sign;
     bool is_same_block;
 
     public:
     double_remove_segment(work_data_t &data_, configuration_t &config_, triqs::mc_tools::random_generator &rng_)
-       : wdata(data_), config(config_), rng(rng_) {
-
-        // Generate a list of all possible two different color pairs. e.g.
-        // if n_color = 4, then outputs (0, 1), (0, 2), (0, 3), (1, 0), 
-        // (1, 2), (1, 3), (2, 0), (2, 1), (2, 3), (3, 0), (3, 1), (3, 2)
-
-        for (int i = 0; i < config.n_color(); ++i) {
-          for (int j = 0; j < config.n_color(); ++j) {
-            if (i != j) all_pairs.emplace_back(i, j);
-          }
-        }
-       };
+       : wdata(data_), config(config_), rng(rng_) {};
     // ------------------
     double attempt();
     double accept();
